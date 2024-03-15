@@ -1,13 +1,12 @@
 from ultralytics import YOLO
 import cv2
-
 import os
 
 
 
 # Helper functions
 
-def manual_label_change(original_label, names_dict):
+def get_custom_label(original_label):
     new_label = "Undefined" 
 
     if original_label == 'person':
@@ -26,6 +25,8 @@ model = YOLO('yolov8n.pt')
 # load the video
 video_path = os.path.join(os.path.dirname(__file__), 'videos', 'shohei_pitch.mp4')
 
+processed_people = {}
+
 cap = cv2.VideoCapture(video_path)
 
 
@@ -41,15 +42,18 @@ while cap.isOpened():
     # persist parameter allows the model to track the objects found in the video
     results = model.track(frame, persist = True)
 
-    for result in results: # iterate through each results object in the list
-        for det in result.boxes: # now accessing the boxes for each detection
+    for result in results:
+        for det in result.boxes:
+            object_id = int(det.id.item())
+            
+            if object_id not in processed_people:
+                custom_label = get_custom_label(result.names[int(det.cls)])
+                processed_people[object_id] = custom_label
+            else:
+                custom_label = processed_people[object_id]
+
             x1, y1, x2, y2 = det.xyxy[0].tolist() # get the coordinates of the bounding box
-            original_class_id = int(det.cls) # Assuming det.cls to be the original class ID
-            original_label = result.names[original_class_id] # Get original label
-            # Manually determine the new label (custom label logic goes here)
-            new_label = manual_label_change(original_label, result.names) #Function to get new label
-
-
+            
             # Draw the bounding box
             cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
 
@@ -57,11 +61,9 @@ while cap.isOpened():
             label_position = (int(x1), int(y1) - 10)
 
             # Add the custom label above the bounding box
-            cv2.putText(frame, new_label, label_position, cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            cv2.putText(frame, custom_label, label_position, cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
-
-
-
+    
     # Display the frame
     cv2.imshow('frame', frame)
 
@@ -70,3 +72,8 @@ while cap.isOpened():
 
 cap.release()
 cv2.destroyAllWindows()
+
+
+for object_id, label in processed_people.items():
+    print(f"object_id: {object_id}, label: {label}")
+
